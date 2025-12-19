@@ -115,7 +115,8 @@ export class GameState {
     }
 
     const card = hand[cardIndex]
-    if (!canPlayCard(card, this.discard)) {
+    const drawPending = this.drawNumber > 1
+    if (!canPlayCard(card, this.discard, drawPending)) {
       return { error: 'Cannot play this card' }
     }
 
@@ -162,17 +163,15 @@ export class GameState {
     this.discard = card
     this.discardPile.push(card)
 
-    // Handle draw effect on next player
+    // Handle draw effect - accumulate for stacking
     if (effect.draw > 0) {
-      this.drawNumber += effect.draw - 1
-      // const nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
-      // const nextPlayer = this.players[nextTurn]
-      // for (let i = 0; i < effect.draw; i++) {
-      //   const drawnCard = this.drawFromDeck()
-      //   if (drawnCard) {
-      //     this.hands[nextPlayer.socketId].push(drawnCard)
-      //   }
-      // }
+      if (this.drawNumber === 1) {
+        this.drawNumber += effect.draw - 1
+      } else {
+        this.drawNumber += effect.draw
+      }
+      // Don't skip - next player gets a chance to stack or draw
+      effect.skip = false
     }
 
     // Advance turn
@@ -203,16 +202,11 @@ export class GameState {
     // Get effect again for advancing turn
     const effect = getCardEffect(card, this.currentTurn, this.direction, this.players.length)
 
-    // Handle draw effect on next player for wild4
+    // Handle draw effect - accumulate for stacking (wild4)
     if (effect.draw > 0) {
-      const nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
-      const nextPlayer = this.players[nextTurn]
-      for (let i = 0; i < effect.draw; i++) {
-        const drawnCard = this.drawFromDeck()
-        if (drawnCard) {
-          this.hands[nextPlayer.socketId].push(drawnCard)
-        }
-      }
+      this.drawNumber += effect.draw
+      // Don't skip - next player gets a chance to stack or draw
+      effect.skip = false
     }
 
     // Advance turn
@@ -333,7 +327,9 @@ export class GameState {
       hasCalled: this.unoCalled[socketId] || false,
       playersWithOneCard: this.players
         .filter(p => this.hands[p.socketId]?.length === 1 && !this.unoCalled[p.socketId] && p.socketId !== socketId)
-        .map(p => ({ socketId: p.socketId, name: p.name, position: p.position }))
+        .map(p => ({ socketId: p.socketId, name: p.name, position: p.position })),
+      drawPending: this.drawNumber > 1,
+      drawNumber: this.drawNumber
     }
   }
 }

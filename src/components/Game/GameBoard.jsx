@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { socket } from '../../services/socket'
 import Hand from '../Hand'
 import OpponentHand from './OpponentHand'
 
-function canPlayCard(card, discard) {
+function canPlayCard(card, discard, drawPending = false) {
   if (!discard) return true
   if (!card || !card.type) return false
 
@@ -11,6 +11,17 @@ function canPlayCard(card, discard) {
   const c = card.color
   const topT = discard.type
   const topC = discard.color
+
+  // If there's a draw penalty pending, only draw cards can be played to stack
+  if (drawPending) {
+    // Can stack draw2 on draw2, or wild4 on any draw card
+    if (topT === 'draw2') {
+      return t === 'draw2' || t === 'wild4'
+    }
+    if (topT === 'wild4') {
+      return t === 'wild4'
+    }
+  }
 
   if (t === 'wild' || t === 'wild4') return true
 
@@ -33,15 +44,72 @@ export default function GameBoard({ gameState, onColorSelect }) {
     currentPlayerPosition,
     pendingColorSelection,
     winner,
-    playerCount
+    playerCount,
+    drawPending,
+    drawNumber
   } = gameState
 
   const [flyingCard, setFlyingCard] = useState(null)
   const discardRef = useRef(null)
+  // Turn timer UI state (client-side)
+  const [timerActive, setTimerActive] = useState(false)
+  const [timerRemaining, setTimerRemaining] = useState(0)
+  const timerRef = useRef({ end: 0, intervalId: null })
+
+  useEffect(() => {
+    function onTimerStart({ duration }) {
+      const now = Date.now()
+      timerRef.current.end = now + duration
+      setTimerActive(true)
+      setTimerRemaining(duration)
+
+      if (timerRef.current.intervalId) clearInterval(timerRef.current.intervalId)
+      timerRef.current.intervalId = setInterval(() => {
+        const rem = Math.max(0, timerRef.current.end - Date.now())
+        setTimerRemaining(rem)
+        if (rem <= 0) {
+          clearInterval(timerRef.current.intervalId)
+          timerRef.current.intervalId = null
+          setTimerActive(false)
+        }
+      }, 100)
+    }
+
+    function onAutoDraw() {
+      // hide timer immediately when auto-draw is performed
+      setTimerActive(false)
+      setTimerRemaining(0)
+      if (timerRef.current.intervalId) {
+        clearInterval(timerRef.current.intervalId)
+        timerRef.current.intervalId = null
+      }
+    }
+
+    socket.on('turn-timer-start', onTimerStart)
+    socket.on('auto-draw', onAutoDraw)
+
+    return () => {
+      socket.off('turn-timer-start', onTimerStart)
+      socket.off('auto-draw', onAutoDraw)
+      if (timerRef.current.intervalId) clearInterval(timerRef.current.intervalId)
+    }
+  }, [])
+
+  // hide timer during pending color selection or after game end
+  useEffect(() => {
+    if (pendingColorSelection || winner) {
+      setTimerActive(false)
+      setTimerRemaining(0)
+      if (timerRef.current.intervalId) {
+        clearInterval(timerRef.current.intervalId)
+        timerRef.current.intervalId = null
+      }
+    }
+  }, [pendingColorSelection, winner])
 
   const handlePlayCard = (card, index, cardElement) => {
     if (!isMyTurn) return
-    if (!canPlayCard(card, discard)) return
+    if (!canPlayCard(card, discard, drawPending)) return
 
     // Get positions for animation
     const cardRect = cardElement.getBoundingClientRect()
@@ -141,9 +209,28 @@ export default function GameBoard({ gameState, onColorSelect }) {
       <div className="center">
         <h2>UNO</h2>
         <p>Deck: {deckCount}</p>
-        <button type="button" onClick={handleDrawCard} disabled={!isMyTurn || pendingColorSelection}>
-          Draw
-        </button>
+        {drawPending && (
+          <div className="draw-penalty">
+            Draw +{drawNumber}!
+          </div>
+        )}
+
+        <div className="center-controls">
+          <button type="button" onClick={handleDrawCard} disabled={!isMyTurn || pendingColorSelection}>
+            {drawPending ? `Draw ${drawNumber}` : 'Draw'}
+          </button>
+
+          {/* Timer displayed to the right of the Draw button */}
+          <div className="turn-timer-container">
+            {timerActive && (
+              <div className="turn-timer">
+                <div className="timer-circle">
+                  <div className="timer-value">{Math.ceil(timerRemaining / 1000)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="discard-pile" ref={discardRef}>

@@ -29,6 +29,55 @@ const io = new Server(httpServer, {
 
 const roomManager = new RoomManager()
 
+// Per-room turn timers (auto-draw when player times out)
+const turnTimers = new Map() // roomCode -> timeoutId
+
+function clearTurnTimer(room) {
+  if (!room) return
+  const t = turnTimers.get(room.code)
+  if (t) {
+    clearTimeout(t)
+    turnTimers.delete(room.code)
+  }
+}
+
+function scheduleTurnTimer(room, duration = 10000) {
+  clearTurnTimer(room)
+  if (!room || room.status !== 'playing' || !room.gameState) return
+  const gs = room.gameState
+  // don't auto-timer while waiting for color selection
+  if (gs.pendingWild) return
+  if (gs.winner) return
+
+  const currentPlayer = gs.players[gs.currentTurn]
+  if (!currentPlayer) return
+  const socketId = currentPlayer.socketId
+
+  // notify player that their timer started
+  io.to(socketId).emit('turn-timer-start', { duration })
+
+  const timer = setTimeout(() => {
+    // re-check current turn hasn't changed
+    const gsNow = room.gameState
+    if (!gsNow) return
+    const curr = gsNow.players[gsNow.currentTurn]
+    if (!curr || curr.socketId !== socketId) return
+
+    // perform auto-draw for the player who timed out
+    const result = gsNow.drawCard(socketId)
+    if (result.error) {
+      io.to(socketId).emit('error', { message: result.error })
+    } else {
+      // let the player know what was drawn
+      io.to(socketId).emit('auto-draw', { card: result.card })
+      // broadcast updated game state to all players
+      broadcastGameState(room)
+    }
+  }, duration)
+
+  turnTimers.set(room.code, timer)
+}
+
 // Broadcast game state to all players in a room
 function broadcastGameState(room) {
   if (!room.gameState) return
@@ -37,6 +86,8 @@ function broadcastGameState(room) {
     const state = room.gameState.getStateForPlayer(player.socketId)
     io.to(player.socketId).emit('game-state', state)
   }
+  // Schedule a turn timer for the active player (server enforces timeout)
+  scheduleTurnTimer(room)
 }
 
 // Broadcast room info to all players in a room
@@ -163,6 +214,8 @@ io.on('connection', (socket) => {
     if (result.error) {
       socket.emit('error', { message: result.error })
       return
+        // cancel any pending auto-draw timer for this room while we process the action
+        clearTurnTimer(room)
     }
 
     if (result.winner) {
@@ -186,6 +239,8 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: result.error })
       return
     }
+        // clear timer while processing
+        clearTurnTimer(room)
 
     broadcastGameState(room)
   })
@@ -205,6 +260,8 @@ io.on('connection', (socket) => {
       return
     }
 
+        // clear timer while processing selection
+        clearTurnTimer(room)
     broadcastGameState(room)
   })
 
