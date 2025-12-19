@@ -1,6 +1,8 @@
-import React from 'react'
-
 const Hand = ({ cards = [], onCardClick = () => {} }) => {
+    const handleClick = (e, card, index) => {
+        onCardClick(card, index, e.currentTarget)
+    }
+
     return (
         <div className="hand">
             {cards.map((card, index) => (
@@ -8,7 +10,7 @@ const Hand = ({ cards = [], onCardClick = () => {} }) => {
                     className={`card ${card.color || ''}`}
                     key={index}
                     type="button"
-                    onClick={() => onCardClick(card, index)}
+                    onClick={(e) => handleClick(e, card, index)}
                 >
                     {/* show image if available, otherwise show type text */}
                     {card.image ? (

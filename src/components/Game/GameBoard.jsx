@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react'
 import { socket } from '../../services/socket'
 import Hand from '../Hand'
 import OpponentHand from './OpponentHand'
@@ -35,10 +36,40 @@ export default function GameBoard({ gameState, onColorSelect }) {
     playerCount
   } = gameState
 
-  const handlePlayCard = (card, index) => {
+  const [flyingCard, setFlyingCard] = useState(null)
+  const discardRef = useRef(null)
+
+  const handlePlayCard = (card, index, cardElement) => {
     if (!isMyTurn) return
     if (!canPlayCard(card, discard)) return
-    socket.emit('play-card', { cardIndex: index })
+
+    // Get positions for animation
+    const cardRect = cardElement.getBoundingClientRect()
+    const discardRect = discardRef.current?.getBoundingClientRect()
+
+    if (discardRect) {
+      // Calculate the distance to fly
+      const deltaX = discardRect.left + discardRect.width / 2 - (cardRect.left + cardRect.width / 2)
+      const deltaY = discardRect.top + discardRect.height / 2 - (cardRect.top + cardRect.height / 2)
+
+      setFlyingCard({
+        card,
+        startX: cardRect.left,
+        startY: cardRect.top,
+        deltaX,
+        deltaY,
+        width: cardRect.width,
+        height: cardRect.height
+      })
+
+      // Clear flying card and emit after animation
+      setTimeout(() => {
+        setFlyingCard(null)
+        socket.emit('play-card', { cardIndex: index })
+      }, 350)
+    } else {
+      socket.emit('play-card', { cardIndex: index })
+    }
   }
 
   const handleDrawCard = () => {
@@ -91,19 +122,19 @@ export default function GameBoard({ gameState, onColorSelect }) {
   return (
     <div className="game-table">
       <div className="top-section">
-        <div className="current-turn">
+        <div className={`current-turn ${isMyTurn ? 'my-turn-banner' : ''}`}>
           {currentPlayerName}
         </div>
         {topOpponent && (
-          <div className="player top">
-            <OpponentHand opponent={topOpponent} position="top" />
+          <div className={`player top ${topOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+            <OpponentHand opponent={topOpponent} position="top" isCurrentTurn={topOpponent.position === currentPlayerPosition} />
           </div>
         )}
       </div>
 
       {leftOpponent && (
-        <div className="player left">
-          <OpponentHand opponent={leftOpponent} position="left" />
+        <div className={`player left ${leftOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={leftOpponent} position="left" isCurrentTurn={leftOpponent.position === currentPlayerPosition} />
         </div>
       )}
 
@@ -115,7 +146,7 @@ export default function GameBoard({ gameState, onColorSelect }) {
         </button>
       </div>
 
-      <div className="discard-pile">
+      <div className="discard-pile" ref={discardRef}>
         {discard ? (
           <div className={`card ${discard.color || ''}`} aria-hidden>
             {discard.image ? (
@@ -130,9 +161,30 @@ export default function GameBoard({ gameState, onColorSelect }) {
         )}
       </div>
 
+      {/* Flying card animation */}
+      {flyingCard && (
+        <div
+          className={`flying-card card ${flyingCard.card.color || ''}`}
+          style={{
+            left: flyingCard.startX,
+            top: flyingCard.startY,
+            width: flyingCard.width,
+            height: flyingCard.height,
+            '--fly-x': `${flyingCard.deltaX}px`,
+            '--fly-y': `${flyingCard.deltaY}px`
+          }}
+        >
+          {flyingCard.card.image ? (
+            <img src={flyingCard.card.image} alt={flyingCard.card.type} />
+          ) : (
+            <div className="card-label">{flyingCard.card.type}</div>
+          )}
+        </div>
+      )}
+
       {rightOpponent && (
-        <div className="player right">
-          <OpponentHand opponent={rightOpponent} position="right" />
+        <div className={`player right ${rightOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={rightOpponent} position="right" isCurrentTurn={rightOpponent.position === currentPlayerPosition} />
         </div>
       )}
 

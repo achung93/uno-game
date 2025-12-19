@@ -51,6 +51,26 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Card hover effect in player's hand */
+.player.bottom .hand .card:hover {
+  transform: translateY(-15px) scale(1.05);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+/* Card click/play animation */
+.player.bottom .hand .card:active {
+  transform: translateY(-30px) scale(1.1);
+  animation: card-play 0.3s ease-out;
+}
+
+@keyframes card-play {
+  0% { transform: translateY(-15px) scale(1.05); }
+  50% { transform: translateY(-50px) scale(1.15); opacity: 0.8; }
+  100% { transform: translateY(-30px) scale(1.1); opacity: 1; }
 }
 
 .read-the-docs {
@@ -95,6 +115,28 @@
   flex-direction: column;
   align-items: center;
   gap: 1.5rem;
+}
+
+/* Current turn banner */
+.current-turn {
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.current-turn.my-turn-banner {
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  color: white;
+  animation: pulse-banner 1.5s ease-in-out infinite;
+  font-size: 1.4rem;
+}
+
+@keyframes pulse-banner {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 .player.top,
@@ -142,6 +184,89 @@
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
+}
+
+/* Draw button styling and animation */
+.center button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.center button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+}
+
+.center button:active:not(:disabled) {
+  transform: scale(0.95);
+  animation: draw-pulse 0.3s ease-out;
+}
+
+.center button:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@keyframes draw-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7); }
+  100% { box-shadow: 0 0 0 20px rgba(52, 152, 219, 0); }
+}
+
+/* Discard pile animation when new card is played */
+.discard-pile {
+  position: relative;
+}
+
+.discard-pile .card {
+  animation: card-land 0.4s ease-out;
+}
+
+@keyframes card-land {
+  0% {
+    transform: translateY(-100px) rotate(-15deg) scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(10px) rotate(5deg) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Flying card animation */
+.flying-card {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  animation: fly-to-discard 0.35s ease-in-out forwards;
+}
+
+@keyframes fly-to-discard {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(calc(var(--fly-x) * 0.5), calc(var(--fly-y) * 0.5 - 30px)) rotate(-15deg) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-x), var(--fly-y)) rotate(0deg) scale(1);
+    opacity: 0.8;
+  }
 }
 
 /* Wild card color picker modal */
@@ -486,6 +611,41 @@
 .opponent-name {
   font-weight: bold;
   font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+/* Turn indicator arrow animation */
+.turn-indicator {
+  display: inline-block;
+  animation: bounce-arrow 0.8s ease-in-out infinite;
+}
+
+@keyframes bounce-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+/* Opponent with current turn */
+.opponent-hand.current-turn {
+  animation: opponent-turn-glow 1.5s ease-in-out infinite;
+  padding: 0.5rem;
+  border-radius: 12px;
+}
+
+.opponent-hand.current-turn .opponent-name {
+  color: #f39c12;
+  font-size: 1rem;
+}
+
+@keyframes opponent-turn-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px 2px rgba(243, 156, 18, 0.5),
+                0 0 20px 4px rgba(243, 156, 18, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px 6px rgba(243, 156, 18, 0.7),
+                0 0 40px 10px rgba(243, 156, 18, 0.4);
+  }
 }
 
 .card-backs {

@@ -1,7 +1,10 @@
-export default function OpponentHand({ opponent, position }) {
+export default function OpponentHand({ opponent, position, isCurrentTurn }) {
   return (
-    <div className={`opponent-hand ${position}`}>
-      <span className="opponent-name">{opponent.name}</span>
+    <div className={`opponent-hand ${position} ${isCurrentTurn ? 'current-turn' : ''}`}>
+      <span className="opponent-name">
+        {opponent.name}
+        {isCurrentTurn && <span className="turn-indicator"> ⬅</span>}
+      </span>
       <div className="card-backs">
         {Array.from({ length: Math.min(opponent.cardCount, 10) }).map((_, i) => (
           <div key={i} className="card-back" />

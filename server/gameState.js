@@ -19,6 +19,7 @@ export class GameState {
     this.winner = null
     this.unoCallRequired = null // socketId of player who needs to call UNO
     this.unoCalled = {} // socketId -> boolean, tracks who has called UNO
+    this.drawNumber = 1
   }
 
   initialize() {
@@ -163,14 +164,15 @@ export class GameState {
 
     // Handle draw effect on next player
     if (effect.draw > 0) {
-      const nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
-      const nextPlayer = this.players[nextTurn]
-      for (let i = 0; i < effect.draw; i++) {
-        const drawnCard = this.drawFromDeck()
-        if (drawnCard) {
-          this.hands[nextPlayer.socketId].push(drawnCard)
-        }
-      }
+      this.drawNumber += effect.draw - 1
+      // const nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
+      // const nextPlayer = this.players[nextTurn]
+      // for (let i = 0; i < effect.draw; i++) {
+      //   const drawnCard = this.drawFromDeck()
+      //   if (drawnCard) {
+      //     this.hands[nextPlayer.socketId].push(drawnCard)
+      //   }
+      // }
     }
 
     // Advance turn
@@ -235,17 +237,27 @@ export class GameState {
       return { error: 'Must select a color first' }
     }
 
-    const card = this.drawFromDeck()
-    if (!card) {
+    const drawnCards = []
+    for (let i = 0; i < this.drawNumber; i++) {
+      const card = this.drawFromDeck()
+      if (!card) {
+        break // No more cards available
+      }
+      this.hands[socketId].push(card)
+      drawnCards.push(card)
+    }
+
+    if (drawnCards.length === 0) {
       return { error: 'No cards available' }
     }
 
-    this.hands[socketId].push(card)
+    // Reset drawNumber back to 1
+    this.drawNumber = 1
 
     // Advance turn after drawing
     this.currentTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
 
-    return { success: true, card }
+    return { success: true, cards: drawnCards, count: drawnCards.length }
   }
 
   callUno(socketId) {
