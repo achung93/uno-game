@@ -46,7 +46,7 @@ export class RoomManager {
       return { error: 'Game already in progress' }
     }
 
-    if (room.players.length >= 4) {
+    if (room.players.length >= 5) {
       return { error: 'Room is full' }
     }
 
@@ -121,7 +121,9 @@ export class RoomManager {
     const room = this.rooms.get(roomCode)
     if (!room) return false
     if (room.status !== 'waiting') return false
-    return room.players.length >= 1
+    if (room.players.length < 2) return false
+    // All players must be ready
+    return room.players.every(p => p.ready)
   }
 
   getRoom(roomCode) {

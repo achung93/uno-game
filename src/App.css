@@ -122,6 +122,22 @@
   gap: 1.5rem;
 }
 
+.top-section .player {
+  display: flex;
+  justify-content: center;
+}
+
+.top-section:has(.player.top-left) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.top-section:has(.player.top-left) .current-turn {
+  width: 100%;
+  text-align: center;
+}
+
 /* Current turn banner */
 .current-turn {
   font-size: 1.2rem;
@@ -145,8 +161,16 @@
 }
 
 .player.top,
+.player.top-left,
+.player.top-right,
 .player.bottom {
   width: 100%;
+}
+
+.player.top-left,
+.player.top-right {
+  flex: 1;
+  max-width: 45%;
 }
 
 .player.left {
@@ -290,6 +314,18 @@
     transform: translate(var(--fly-x), var(--fly-y)) rotate(0deg) scale(1);
     opacity: 0.8;
   }
+}
+
+/* Drawing card animation - card back flying from deck to hand */
+.flying-card.card-back {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.drawing-card {
+  animation: fly-to-discard 0.35s ease-in-out forwards;
+  animation-fill-mode: both;
 }
 
 /* Wild card color picker modal */

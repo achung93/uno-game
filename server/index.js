@@ -214,8 +214,19 @@ io.on('connection', (socket) => {
     if (result.error) {
       socket.emit('error', { message: result.error })
       return
-        // cancel any pending auto-draw timer for this room while we process the action
-        clearTurnTimer(room)
+    }
+
+    // Clear timer when a card is played
+    clearTurnTimer(room)
+
+    // Broadcast card-played event to all players for animation
+    if (result.playedCard) {
+      for (const player of room.players) {
+        io.to(player.socketId).emit('card-played', {
+          card: result.playedCard,
+          playerPosition: result.playerPosition
+        })
+      }
     }
 
     if (result.winner) {
@@ -239,8 +250,17 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: result.error })
       return
     }
-        // clear timer while processing
-        clearTurnTimer(room)
+
+    // Clear timer while processing
+    clearTurnTimer(room)
+
+    // Broadcast card-drawn event to all players for animation
+    for (const player of room.players) {
+      io.to(player.socketId).emit('card-drawn', {
+        count: result.count,
+        playerPosition: result.playerPosition
+      })
+    }
 
     broadcastGameState(room)
   })

@@ -13,7 +13,7 @@ export class GameState {
     this.deck = []
     this.discard = null // Top card of discard pile (for display)
     this.discardPile = [] // Full discard pile for reshuffling
-    this.currentTurn = 0 // index in players array
+    this.currentTurn = Math.floor(Math.random() * players.length) // Random starting player
     this.direction = 1 // 1 = clockwise, -1 = counter-clockwise
     this.pendingWild = null // { socketId } when waiting for color selection
     this.winner = null
@@ -128,7 +128,7 @@ export class GameState {
       this.winner = currentPlayer
       this.discard = card
       this.discardPile.push(card)
-      return { success: true, winner: currentPlayer }
+      return { success: true, winner: currentPlayer, playedCard: card, playerPosition: currentPlayer.position }
     }
 
     // Check if player needs to call UNO (1 card left)
@@ -156,7 +156,7 @@ export class GameState {
       // But still set discard without color
       this.discard = { ...card }
       this.discardPile.push(card)
-      return { success: true, pendingColor: true }
+      return { success: true, pendingColor: true, playedCard: card, playerPosition: currentPlayer.position }
     }
 
     // Set discard
@@ -181,7 +181,7 @@ export class GameState {
     }
     this.currentTurn = nextTurn
 
-    return { success: true }
+    return { success: true, playedCard: card, playerPosition: currentPlayer.position }
   }
 
   selectColor(socketId, color) {
@@ -251,7 +251,7 @@ export class GameState {
     // Advance turn after drawing
     this.currentTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
 
-    return { success: true, cards: drawnCards, count: drawnCards.length }
+    return { success: true, cards: drawnCards, count: drawnCards.length, playerPosition: currentPlayer.position }
   }
 
   callUno(socketId) {

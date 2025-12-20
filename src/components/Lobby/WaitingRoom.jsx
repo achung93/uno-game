@@ -14,7 +14,7 @@ export default function WaitingRoom({ roomInfo, onLeave }) {
     onLeave()
   }
 
-  const canStart = roomInfo.players.length >= 1
+  const allReady = roomInfo.players.length >= 2 && roomInfo.players.every(p => p.ready)
   const myPlayer = roomInfo.players.find(p => p.isHost === roomInfo.isHost) || roomInfo.players[0]
 
   return (
@@ -23,7 +23,7 @@ export default function WaitingRoom({ roomInfo, onLeave }) {
       <p className="room-code-hint">Share this code with friends to join!</p>
 
       <div className="players-list">
-        <h3>Players ({roomInfo.players.length}/4)</h3>
+        <h3>Players ({roomInfo.players.length}/5)</h3>
         {roomInfo.players.map((player, index) => (
           <div key={index} className={`player-row ${player.ready ? 'ready' : ''}`}>
             <span className="player-name">
@@ -46,10 +46,10 @@ export default function WaitingRoom({ roomInfo, onLeave }) {
           <button
             type="button"
             onClick={handleStartGame}
-            disabled={!canStart}
+            disabled={!allReady}
             className="start-btn"
           >
-            Start Game
+            {allReady ? 'Start Game' : 'Waiting for players...'}
           </button>
         )}
 
