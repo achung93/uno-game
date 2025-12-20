@@ -2,12 +2,13 @@ import { generateShuffledDeck } from './utils/deck.js'
 import { canPlayCard, getNextTurn, getCardEffect } from './gameLogic.js'
 
 export class GameState {
-  constructor(players) {
-    // players: array of { socketId, name, position }
+  constructor(players, teamModeEnabled = false) {
+    // players: array of { socketId, name, position, team }
     this.players = players.map(p => ({
       socketId: p.socketId,
       name: p.name,
-      position: p.position
+      position: p.position,
+      team: p.team
     }))
     this.hands = {} // socketId -> array of cards
     this.deck = []
@@ -17,9 +18,104 @@ export class GameState {
     this.direction = 1 // 1 = clockwise, -1 = counter-clockwise
     this.pendingWild = null // { socketId } when waiting for color selection
     this.winner = null
+    this.winningTeam = null // Team number if team mode
     this.unoCallRequired = null // socketId of player who needs to call UNO
     this.unoCalled = {} // socketId -> boolean, tracks who has called UNO
     this.drawNumber = 1
+
+    // Team mode - uses player-selected teams from lobby
+    this.teamMode = teamModeEnabled
+    this.teams = {} // socketId -> team number
+    this.lastTeamPlayed = null // Track which team last played for alternating turns
+
+    if (this.teamMode) {
+      this.assignTeamsFromPlayers()
+      // Build turn order for alternating team play
+      this.buildTeamTurnOrder()
+    }
+  }
+
+  assignTeamsFromPlayers() {
+    // Use the team assignments from player selections
+    for (const player of this.players) {
+      this.teams[player.socketId] = player.team
+    }
+  }
+
+  buildTeamTurnOrder() {
+    // Group players by team
+    this.teamGroups = {}
+    for (const player of this.players) {
+      const team = this.teams[player.socketId]
+      if (!this.teamGroups[team]) {
+        this.teamGroups[team] = []
+      }
+      this.teamGroups[team].push(player)
+    }
+
+    // Track which player in each team plays next
+    this.teamPlayerIndex = {}
+    for (const team of Object.keys(this.teamGroups)) {
+      this.teamPlayerIndex[team] = 0
+    }
+
+    // Get sorted team numbers for alternating
+    this.teamOrder = Object.keys(this.teamGroups).map(Number).sort((a, b) => a - b)
+    this.currentTeamIndex = 0
+
+    // Set initial turn to first player of first team
+    const firstTeam = this.teamOrder[0]
+    const firstPlayer = this.teamGroups[firstTeam][0]
+    this.currentTurn = this.players.findIndex(p => p.socketId === firstPlayer.socketId)
+  }
+
+  // Get next turn for team mode - alternates between teams, then within team
+  getNextTeamTurn(skipped = false) {
+    const currentPlayer = this.players[this.currentTurn]
+    const currentTeam = this.teams[currentPlayer.socketId]
+
+    // Move to next team
+    let nextTeamIndex = (this.teamOrder.indexOf(currentTeam) + 1) % this.teamOrder.length
+
+    // If skipped, skip the next team too
+    if (skipped) {
+      nextTeamIndex = (nextTeamIndex + 1) % this.teamOrder.length
+    }
+
+    const nextTeam = this.teamOrder[nextTeamIndex]
+
+    // Get the next player from that team (alternate between teammates)
+    const teamPlayers = this.teamGroups[nextTeam]
+    const playerIndex = this.teamPlayerIndex[nextTeam]
+    const nextPlayer = teamPlayers[playerIndex]
+
+    // Advance the team's player index for next time
+    this.teamPlayerIndex[nextTeam] = (playerIndex + 1) % teamPlayers.length
+
+    // Find the player index in the main players array
+    return this.players.findIndex(p => p.socketId === nextPlayer.socketId)
+  }
+
+  // Unified method to advance turn
+  advanceTurn(skip = false) {
+    if (this.teamMode) {
+      return this.getNextTeamTurn(skip)
+    } else {
+      let nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
+      if (skip) {
+        nextTurn = getNextTurn(nextTurn, this.direction, this.players.length)
+      }
+      return nextTurn
+    }
+  }
+
+  getTeammate(socketId) {
+    if (!this.teamMode) return null
+    const myTeam = this.teams[socketId]
+    const teammate = this.players.find(p =>
+      p.socketId !== socketId && this.teams[p.socketId] === myTeam
+    )
+    return teammate || null
   }
 
   initialize() {
@@ -128,7 +224,13 @@ export class GameState {
       this.winner = currentPlayer
       this.discard = card
       this.discardPile.push(card)
-      return { success: true, winner: currentPlayer, playedCard: card, playerPosition: currentPlayer.position }
+
+      // In team mode, the whole team wins
+      if (this.teamMode) {
+        this.winningTeam = this.teams[socketId]
+      }
+
+      return { success: true, winner: currentPlayer, winningTeam: this.winningTeam, playedCard: card, playerPosition: currentPlayer.position }
     }
 
     // Check if player needs to call UNO (1 card left)
@@ -174,12 +276,8 @@ export class GameState {
       effect.skip = false
     }
 
-    // Advance turn
-    let nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
-    if (effect.skip) {
-      nextTurn = getNextTurn(nextTurn, this.direction, this.players.length)
-    }
-    this.currentTurn = nextTurn
+    // Advance turn using unified method
+    this.currentTurn = this.advanceTurn(effect.skip)
 
     return { success: true, playedCard: card, playerPosition: currentPlayer.position }
   }
@@ -209,12 +307,8 @@ export class GameState {
       effect.skip = false
     }
 
-    // Advance turn
-    let nextTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
-    if (effect.skip) {
-      nextTurn = getNextTurn(nextTurn, this.direction, this.players.length)
-    }
-    this.currentTurn = nextTurn
+    // Advance turn using unified method
+    this.currentTurn = this.advanceTurn(effect.skip)
 
     this.pendingWild = null
 
@@ -248,8 +342,8 @@ export class GameState {
     // Reset drawNumber back to 1
     this.drawNumber = 1
 
-    // Advance turn after drawing
-    this.currentTurn = getNextTurn(this.currentTurn, this.direction, this.players.length)
+    // Advance turn after drawing using unified method
+    this.currentTurn = this.advanceTurn(false)
 
     return { success: true, cards: drawnCards, count: drawnCards.length, playerPosition: currentPlayer.position }
   }
@@ -303,17 +397,26 @@ export class GameState {
   // Returns sanitized state for a specific player
   getStateForPlayer(socketId) {
     const playerIndex = this.players.findIndex(p => p.socketId === socketId)
+    const teammate = this.getTeammate(socketId)
+    const myTeam = this.teamMode ? this.teams[socketId] : null
 
     return {
       myHand: this.hands[socketId] || [],
       myPosition: playerIndex,
       opponents: this.players
         .filter(p => p.socketId !== socketId)
-        .map(p => ({
-          name: p.name,
-          position: p.position,
-          cardCount: (this.hands[p.socketId] || []).length
-        })),
+        .map(p => {
+          const isTeammate = teammate && p.socketId === teammate.socketId
+          return {
+            name: p.name,
+            position: p.position,
+            cardCount: (this.hands[p.socketId] || []).length,
+            isTeammate,
+            team: this.teamMode ? this.teams[p.socketId] : null,
+            // Teammates can see each other's cards
+            cards: isTeammate ? this.hands[p.socketId] : null
+          }
+        }),
       discard: this.discard,
       deckCount: this.deck.length,
       currentTurn: this.currentTurn,
@@ -322,6 +425,7 @@ export class GameState {
       direction: this.direction,
       pendingColorSelection: this.pendingWild?.socketId === socketId,
       winner: this.winner ? { name: this.winner.name, position: this.winner.position } : null,
+      winningTeam: this.winningTeam,
       playerCount: this.players.length,
       canCallUno: this.hands[socketId]?.length === 1 && !this.unoCalled[socketId],
       hasCalled: this.unoCalled[socketId] || false,
@@ -329,7 +433,11 @@ export class GameState {
         .filter(p => this.hands[p.socketId]?.length === 1 && !this.unoCalled[p.socketId] && p.socketId !== socketId)
         .map(p => ({ socketId: p.socketId, name: p.name, position: p.position })),
       drawPending: this.drawNumber > 1,
-      drawNumber: this.drawNumber
+      drawNumber: this.drawNumber,
+      // Team mode info
+      teamMode: this.teamMode,
+      myTeam,
+      teammatePosition: teammate?.position ?? null
     }
   }
 }

@@ -44,9 +44,13 @@ export default function GameBoard({ gameState, onColorSelect }) {
     currentPlayerPosition,
     pendingColorSelection,
     winner,
+    winningTeam,
     playerCount,
     drawPending,
-    drawNumber
+    drawNumber,
+    teamMode,
+    myTeam,
+    teammatePosition
   } = gameState
 
   const [flyingCard, setFlyingCard] = useState(null)
@@ -228,25 +232,33 @@ export default function GameBoard({ gameState, onColorSelect }) {
     const positions3 = ['left', 'top']
     const positions4 = ['left', 'top', 'right']
     const positions5 = ['left', 'top-left', 'top-right', 'right']
+    const positions6 = ['left', 'top-left', 'top', 'top-right', 'right']
+    const positions7 = ['left', 'left-top', 'top-left', 'top-right', 'right-top', 'right']
+    const positions8 = ['left', 'left-top', 'top-left', 'top', 'top-right', 'right-top', 'right']
 
     const relativePos = (opponent.position - myPosition + playerCount) % playerCount - 1
 
     if (playerCount === 2) return positions2[0]
     if (playerCount === 3) return positions3[relativePos] || 'top'
     if (playerCount === 4) return positions4[relativePos] || 'top'
-    return positions5[relativePos] || 'top'
+    if (playerCount === 5) return positions5[relativePos] || 'top'
+    if (playerCount === 6) return positions6[relativePos] || 'top'
+    if (playerCount === 7) return positions7[relativePos] || 'top'
+    return positions8[relativePos] || 'top'
   }
 
   // Sort opponents by position for consistent layout
   const sortedOpponents = [...opponents].sort((a, b) => {
-    const posOrder = { left: 0, 'top-left': 1, top: 2, 'top-right': 3, right: 4 }
+    const posOrder = { left: 0, 'left-top': 1, 'top-left': 2, top: 3, 'top-right': 4, 'right-top': 5, right: 6 }
     return posOrder[getOpponentPosition(a)] - posOrder[getOpponentPosition(b)]
   })
 
   const leftOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'left')
+  const leftTopOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'left-top')
   const topLeftOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'top-left')
   const topOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'top')
   const topRightOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'top-right')
+  const rightTopOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'right-top')
   const rightOpponent = sortedOpponents.find(o => getOpponentPosition(o) === 'right')
 
   // Find whose turn it is
@@ -255,46 +267,93 @@ export default function GameBoard({ gameState, onColorSelect }) {
     : opponents.find(o => o.position === currentPlayerPosition)?.name + "'s turn"
 
   if (winner) {
+    const isMyTeamWin = teamMode && winningTeam === myTeam
+    const isMyWin = winner.position === myPosition
+    const teammate = opponents.find(o => o.position === teammatePosition)
+
+    let winMessage
+    if (teamMode) {
+      if (isMyWin) {
+        winMessage = 'You won for your team!'
+      } else if (isMyTeamWin) {
+        winMessage = `Your teammate ${winner.name} won! Your team wins!`
+      } else {
+        winMessage = `Team ${winningTeam + 1} wins! (${winner.name})`
+      }
+    } else {
+      winMessage = isMyWin ? 'You won!' : `${winner.name} wins!`
+    }
+
     return (
       <div className="game-over">
         <h1>Game Over!</h1>
-        <h2>{winner.position === myPosition ? 'You won!' : `${winner.name} wins!`}</h2>
+        {teamMode && <p className="team-mode-badge">Team Mode</p>}
+        <h2>{winMessage}</h2>
+        {teamMode && teammate && (
+          <p className="teammate-info">Your teammate: {teammate.name}</p>
+        )}
         <button onClick={() => window.location.reload()}>Play Again</button>
       </div>
     )
   }
 
+  // Determine layout class based on player count
+  const layoutClass = `layout-${playerCount}-players`
+
   return (
-    <div className="game-table">
-      <div className="top-section">
-        <div className={`current-turn ${isMyTurn ? 'my-turn-banner' : ''}`}>
-          {currentPlayerName}
-        </div>
-        {topLeftOpponent && (
-          <div ref={el => opponentRefs.current[topLeftOpponent.position] = el} className={`player top-left ${topLeftOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
-            <OpponentHand opponent={topLeftOpponent} position="top-left" isCurrentTurn={topLeftOpponent.position === currentPlayerPosition} />
-          </div>
-        )}
-        {topOpponent && (
-          <div ref={el => opponentRefs.current[topOpponent.position] = el} className={`player top ${topOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
-            <OpponentHand opponent={topOpponent} position="top" isCurrentTurn={topOpponent.position === currentPlayerPosition} />
-          </div>
-        )}
-        {topRightOpponent && (
-          <div ref={el => opponentRefs.current[topRightOpponent.position] = el} className={`player top-right ${topRightOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
-            <OpponentHand opponent={topRightOpponent} position="top-right" isCurrentTurn={topRightOpponent.position === currentPlayerPosition} />
-          </div>
-        )}
+    <div className={`game-table ${layoutClass}`}>
+      <div className={`current-turn ${isMyTurn ? 'my-turn-banner' : ''}`}>
+        {currentPlayerName}
       </div>
 
+      {/* Render all opponents in their positions */}
       {leftOpponent && (
         <div ref={el => opponentRefs.current[leftOpponent.position] = el} className={`player left ${leftOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
           <OpponentHand opponent={leftOpponent} position="left" isCurrentTurn={leftOpponent.position === currentPlayerPosition} />
         </div>
       )}
 
+      {leftTopOpponent && (
+        <div ref={el => opponentRefs.current[leftTopOpponent.position] = el} className={`player left-top ${leftTopOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={leftTopOpponent} position="left-top" isCurrentTurn={leftTopOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
+      {topLeftOpponent && (
+        <div ref={el => opponentRefs.current[topLeftOpponent.position] = el} className={`player top-left ${topLeftOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={topLeftOpponent} position="top-left" isCurrentTurn={topLeftOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
+      {topOpponent && (
+        <div ref={el => opponentRefs.current[topOpponent.position] = el} className={`player top ${topOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={topOpponent} position="top" isCurrentTurn={topOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
+      {topRightOpponent && (
+        <div ref={el => opponentRefs.current[topRightOpponent.position] = el} className={`player top-right ${topRightOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={topRightOpponent} position="top-right" isCurrentTurn={topRightOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
+      {rightTopOpponent && (
+        <div ref={el => opponentRefs.current[rightTopOpponent.position] = el} className={`player right-top ${rightTopOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={rightTopOpponent} position="right-top" isCurrentTurn={rightTopOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
+      {rightOpponent && (
+        <div ref={el => opponentRefs.current[rightOpponent.position] = el} className={`player right ${rightOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
+          <OpponentHand opponent={rightOpponent} position="right" isCurrentTurn={rightOpponent.position === currentPlayerPosition} />
+        </div>
+      )}
+
       <div className="center">
         <h2>UNO</h2>
+        {teamMode && (
+          <p className="team-indicator">Team Mode - Team {myTeam + 1}</p>
+        )}
         <p ref={deckRef} className="deck-display">Deck: {deckCount}</p>
         {drawPending && (
           <div className="draw-penalty">
@@ -394,12 +453,6 @@ export default function GameBoard({ gameState, onColorSelect }) {
             }}
           />
         ))
-      )}
-
-      {rightOpponent && (
-        <div ref={el => opponentRefs.current[rightOpponent.position] = el} className={`player right ${rightOpponent.position === currentPlayerPosition ? 'active-turn' : ''}`}>
-          <OpponentHand opponent={rightOpponent} position="right" isCurrentTurn={rightOpponent.position === currentPlayerPosition} />
-        </div>
       )}
 
       <div ref={myHandRef} className={`player bottom ${isMyTurn ? 'my-turn' : ''}`}>

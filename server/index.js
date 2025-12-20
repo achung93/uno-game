@@ -98,9 +98,11 @@ function broadcastRoomInfo(room) {
       name: p.name,
       position: p.position,
       ready: p.ready,
-      isHost: p.socketId === room.hostSocketId
+      isHost: p.socketId === room.hostSocketId,
+      team: p.team
     })),
-    status: room.status
+    status: room.status,
+    teamMode: room.teamMode
   }
 
   for (const player of room.players) {
@@ -169,6 +171,27 @@ io.on('connection', (socket) => {
     broadcastRoomInfo(result.room)
   })
 
+  // Toggle team mode (host only)
+  socket.on('toggle-team-mode', () => {
+    const result = roomManager.toggleTeamMode(socket.id)
+    if (!result) return
+
+    broadcastRoomInfo(result.room)
+  })
+
+  // Select team
+  socket.on('select-team', ({ team }) => {
+    const result = roomManager.setTeam(socket.id, team)
+    if (!result) return
+
+    if (result.error) {
+      socket.emit('error', { message: result.error })
+      return
+    }
+
+    broadcastRoomInfo(result.room)
+  })
+
   // Start game (host only)
   socket.on('start-game', () => {
     const room = roomManager.getRoomBySocketId(socket.id)
@@ -187,8 +210,8 @@ io.on('connection', (socket) => {
       return
     }
 
-    // Initialize game
-    const gameState = new GameState(room.players)
+    // Initialize game with team mode settings
+    const gameState = new GameState(room.players, room.teamMode)
     gameState.initialize()
     console.log('Game initialized. Top discard:', gameState.discard)
     roomManager.setGameState(room.code, gameState)
