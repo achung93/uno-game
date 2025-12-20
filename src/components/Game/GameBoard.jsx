@@ -50,7 +50,9 @@ export default function GameBoard({ gameState, onColorSelect }) {
     drawNumber,
     teamMode,
     myTeam,
-    teammatePosition
+    teammatePosition,
+    canCallUno,
+    playersWithOneCard
   } = gameState
 
   const [flyingCard, setFlyingCard] = useState(null)
@@ -226,6 +228,14 @@ export default function GameBoard({ gameState, onColorSelect }) {
     socket.emit('select-color', { color })
   }
 
+  const handleCallUno = () => {
+    socket.emit('call-uno')
+  }
+
+  const handleCatchUno = (targetSocketId) => {
+    socket.emit('catch-uno', { targetSocketId })
+  }
+
   // Get opponent positions based on player count and my position
   const getOpponentPosition = (opponent) => {
     const positions2 = ['top']
@@ -376,6 +386,29 @@ export default function GameBoard({ gameState, onColorSelect }) {
               </div>
             )}
           </div>
+        </div>
+
+        {/* UNO buttons */}
+        <div className="uno-controls">
+          {canCallUno && (
+            <button type="button" className="uno-btn call-uno" onClick={handleCallUno}>
+              UNO!
+            </button>
+          )}
+          {playersWithOneCard && playersWithOneCard.length > 0 && (
+            <div className="catch-uno-container">
+              {playersWithOneCard.map(player => (
+                <button
+                  key={player.socketId}
+                  type="button"
+                  className="uno-btn catch-uno"
+                  onClick={() => handleCatchUno(player.socketId)}
+                >
+                  Catch {player.name}!
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
