@@ -33,7 +33,7 @@ function canPlayCard(card, discard, drawPending = false) {
   return c === topC || t === topT
 }
 
-export default function GameBoard({ gameState, onColorSelect }) {
+export default function GameBoard({ gameState }) {
   const {
     myHand,
     myPosition,
@@ -52,7 +52,8 @@ export default function GameBoard({ gameState, onColorSelect }) {
     myTeam,
     teammatePosition,
     canCallUno,
-    playersWithOneCard
+    playersWithOneCard,
+    unoButtonPosition
   } = gameState
 
   const [flyingCard, setFlyingCard] = useState(null)
@@ -388,29 +389,37 @@ export default function GameBoard({ gameState, onColorSelect }) {
           </div>
         </div>
 
-        {/* UNO buttons */}
-        <div className="uno-controls">
-          {canCallUno && (
-            <button type="button" className="uno-btn call-uno" onClick={handleCallUno}>
-              UNO!
-            </button>
-          )}
-          {playersWithOneCard && playersWithOneCard.length > 0 && (
-            <div className="catch-uno-container">
-              {playersWithOneCard.map(player => (
-                <button
-                  key={player.socketId}
-                  type="button"
-                  className="uno-btn catch-uno"
-                  onClick={() => handleCatchUno(player.socketId)}
-                >
-                  Catch {player.name}!
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Catch UNO buttons stay in center */}
+        {playersWithOneCard && playersWithOneCard.length > 0 && (
+          <div className="catch-uno-container">
+            {playersWithOneCard.map(player => (
+              <button
+                key={player.socketId}
+                type="button"
+                className="uno-btn catch-uno"
+                onClick={() => handleCatchUno(player.socketId)}
+              >
+                Catch {player.name}!
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Random position UNO call button - only show after color selection is complete */}
+      {canCallUno && !pendingColorSelection && unoButtonPosition && (
+        <button
+          type="button"
+          className="uno-btn call-uno floating-uno"
+          onClick={handleCallUno}
+          style={{
+            left: `${unoButtonPosition.x}%`,
+            top: `${unoButtonPosition.y}%`
+          }}
+        >
+          UNO!
+        </button>
+      )}
 
       <div className="discard-pile" ref={discardRef}>
         {discard ? (

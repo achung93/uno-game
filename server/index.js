@@ -364,18 +364,41 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id)
 
-    const result = roomManager.leaveRoom(socket.id)
-    if (result && result.room) {
-      // Notify remaining players
-      if (result.room.status === 'playing') {
-        // End game if someone disconnects during play
-        roomManager.endGame(result.room.code)
-        for (const player of result.room.players) {
-          io.to(player.socketId).emit('player-disconnected', {
-            playerName: result.leavingPlayer.name
-          })
-        }
-      } else {
+    const room = roomManager.getRoomBySocketId(socket.id)
+
+    if (room && room.status === 'playing' && room.gameState) {
+      // Game in progress - remove player and continue
+      const removeResult = room.gameState.removePlayer(socket.id)
+
+      // Also remove from room's player list
+      const playerIndex = room.players.findIndex(p => p.socketId === socket.id)
+      const leavingPlayer = playerIndex >= 0 ? room.players[playerIndex] : null
+      if (playerIndex >= 0) {
+        room.players.splice(playerIndex, 1)
+      }
+      roomManager.socketToRoom.delete(socket.id)
+
+      // Notify remaining players about the disconnect
+      for (const player of room.players) {
+        io.to(player.socketId).emit('player-disconnected', {
+          playerName: leavingPlayer?.name || 'A player'
+        })
+      }
+
+      // Check if game should end
+      if (removeResult.gameOver) {
+        roomManager.endGame(room.code)
+      }
+
+      // Clear and reschedule timer
+      clearTurnTimer(room)
+
+      // Broadcast updated state to remaining players
+      broadcastGameState(room)
+    } else {
+      // Not in a game or waiting - just leave normally
+      const result = roomManager.leaveRoom(socket.id)
+      if (result && result.room) {
         broadcastRoomInfo(result.room)
       }
     }

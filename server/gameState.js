@@ -21,6 +21,7 @@ export class GameState {
     this.winningTeam = null // Team number if team mode
     this.unoCallRequired = null // socketId of player who needs to call UNO
     this.unoCalled = {} // socketId -> boolean, tracks who has called UNO
+    this.unoButtonPositions = {} // socketId -> { x, y } random position for UNO button
     this.drawNumber = 1
 
     // Team mode - uses player-selected teams from lobby
@@ -116,6 +117,94 @@ export class GameState {
       p.socketId !== socketId && this.teams[p.socketId] === myTeam
     )
     return teammate || null
+  }
+
+  // Generate a random position for the UNO button within safe zones
+  generateUnoButtonPosition(socketId) {
+    const safeZones = [
+      { minX: 5, maxX: 20, minY: 40, maxY: 75 },   // Left side
+      { minX: 80, maxX: 95, minY: 40, maxY: 75 },  // Right side
+      { minX: 20, maxX: 40, minY: 70, maxY: 85 },  // Bottom left
+      { minX: 60, maxX: 80, minY: 70, maxY: 85 },  // Bottom right
+    ]
+
+    // Pick a random safe zone
+    const zone = safeZones[Math.floor(Math.random() * safeZones.length)]
+
+    // Generate random position within that zone
+    const x = zone.minX + Math.random() * (zone.maxX - zone.minX)
+    const y = zone.minY + Math.random() * (zone.maxY - zone.minY)
+
+    this.unoButtonPositions[socketId] = { x, y }
+  }
+
+  // Remove a player who disconnected and continue the game
+  removePlayer(socketId) {
+    const playerIndex = this.players.findIndex(p => p.socketId === socketId)
+    if (playerIndex === -1) return { error: 'Player not found' }
+
+    const removedPlayer = this.players[playerIndex]
+
+    // Remove player from hands
+    delete this.hands[socketId]
+    delete this.unoCalled[socketId]
+
+    // If only one player left, they win
+    if (this.players.length <= 2) {
+      this.players.splice(playerIndex, 1)
+      if (this.players.length === 1) {
+        this.winner = this.players[0]
+        if (this.teamMode) {
+          this.winningTeam = this.teams[this.players[0].socketId]
+        }
+        return { success: true, gameOver: true, winner: this.winner }
+      }
+    }
+
+    // Adjust currentTurn if needed before removing player
+    const wasCurrentPlayer = this.currentTurn === playerIndex
+
+    // Remove the player
+    this.players.splice(playerIndex, 1)
+
+    // Reassign positions
+    this.players.forEach((p, i) => {
+      p.position = i
+    })
+
+    // If current turn was the removed player or after them, adjust
+    if (wasCurrentPlayer) {
+      // Move to next player (which is now at the same index)
+      this.currentTurn = this.currentTurn % this.players.length
+    } else if (this.currentTurn > playerIndex) {
+      // Adjust index since a player before current was removed
+      this.currentTurn--
+    }
+
+    // Ensure currentTurn is valid
+    this.currentTurn = Math.max(0, Math.min(this.currentTurn, this.players.length - 1))
+
+    // Clear pending wild if it was the removed player
+    if (this.pendingWild && this.pendingWild.socketId === socketId) {
+      this.pendingWild = null
+    }
+
+    // Clear UNO requirement if it was the removed player
+    if (this.unoCallRequired === socketId) {
+      this.unoCallRequired = null
+    }
+
+    // In team mode, update team groups
+    if (this.teamMode) {
+      delete this.teams[socketId]
+      this.buildTeamTurnOrder()
+      // After rebuilding, set current turn to a valid player
+      if (this.players.length > 0) {
+        this.currentTurn = Math.min(this.currentTurn, this.players.length - 1)
+      }
+    }
+
+    return { success: true, removedPlayer }
   }
 
   initialize() {
@@ -258,7 +347,13 @@ export class GameState {
       // But still set discard without color
       this.discard = { ...card }
       this.discardPile.push(card)
+      // UNO button position will be generated after color selection
       return { success: true, pendingColor: true, playedCard: card, playerPosition: currentPlayer.position }
+    }
+
+    // Generate UNO button position now (for non-wild cards with 1 card left)
+    if (hand.length === 1) {
+      this.generateUnoButtonPosition(socketId)
     }
 
     // Set discard
@@ -309,6 +404,11 @@ export class GameState {
 
     // Advance turn using unified method
     this.currentTurn = this.advanceTurn(effect.skip)
+
+    // Generate UNO button position after color selection if player has 1 card
+    if (this.hands[socketId]?.length === 1 && !this.unoCalled[socketId]) {
+      this.generateUnoButtonPosition(socketId)
+    }
 
     this.pendingWild = null
 
@@ -437,7 +537,9 @@ export class GameState {
       // Team mode info
       teamMode: this.teamMode,
       myTeam,
-      teammatePosition: teammate?.position ?? null
+      teammatePosition: teammate?.position ?? null,
+      // Random UNO button position (only sent when player has 1 card and hasn't called)
+      unoButtonPosition: this.unoButtonPositions[socketId] || null
     }
   }
 }
